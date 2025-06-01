@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "423718253702",
+    "project_id": "timemanagementkot-320a6",
+    "storage_bucket": "timemanagementkot-320a6.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:423718253702:android:6e2206ed5b7639eedc0d07",
+        "android_client_info": {
+          "package_name": "com.example.timemanagementkot"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBlPQnZMF3tjwhXx6J6RCgVL9NKAGuNtTY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
