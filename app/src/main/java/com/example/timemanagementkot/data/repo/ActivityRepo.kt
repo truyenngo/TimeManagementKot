@@ -212,6 +212,34 @@ class ActivityRepo {
         }
     }
 
+    suspend fun deleteAllLogTimesByActivityId(activityId: String): Result<Unit> {
+        return try {
+            require(activityId.isNotEmpty()) { "Activity ID must not be empty" }
+
+            val querySnapshot = logTimesCollection
+                .whereEqualTo("activityId", activityId)
+                .get()
+                .await()
+
+            if (querySnapshot.isEmpty) {
+                return Result.success(Unit)
+            }
+
+            val batch = db.batch()
+            querySnapshot.documents.forEach { document ->
+                batch.delete(document.reference)
+            }
+
+            batch.commit().await()
+
+            Log.d("Firestore", "Deleted ${querySnapshot.size()} logTimes for activity $activityId")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e("Firestore", "Error deleting logTimes for activity $activityId", e)
+            Result.failure(e)
+        }
+    }
+
     suspend fun getActivitiesByDate(userId: String, dateOffset: Int = 0): Result<List<ActivityWithLogTime>> {
         return try {
             if (userId.isEmpty()) {
@@ -389,27 +417,6 @@ class ActivityRepo {
         }
     }
 
-    suspend fun getLogsByActivity(activityId: String): Result<List<LogTimeModel>> {
-        return try {
-            require(activityId.isNotEmpty()) { "Activity ID must not be empty" }
-
-            val snapshot = logTimesCollection
-                .whereEqualTo("activityId", activityId)
-                .orderBy("date") // Sắp xếp theo ngày
-                .get()
-                .await()
-
-            val logs = snapshot.documents.mapNotNull { doc ->
-                doc.toObject(LogTimeModel::class.java)?.copy(logTimeId = doc.id)
-            }
-
-            Result.success(logs)
-        } catch (e: Exception) {
-            Log.e("Firestore", "Error loading logs for activity $activityId", e)
-            Result.failure(e)
-        }
-    }
-
     // XU LY AI
     fun getLogsByUser(userId: String): Flow<List<LogTimeModel>> {
         return try {
@@ -445,54 +452,6 @@ class ActivityRepo {
         } catch (e: Exception) {
             Log.e("ActivityRepo", "Lỗi khi đánh dấu log $logId", e)
             Result.failure(e)
-        }
-    }
-
-    suspend fun getUnanalyzedLogs(activityId: String): Result<List<LogTimeModel>> {
-        return try {
-            Log.d("ActivityRepo", "Lấy logs chưa phân tích cho activity $activityId")
-
-            val snapshot = logTimesCollection
-                .whereEqualTo("activityId", activityId)
-                .whereEqualTo("analyzedByAI", false)
-                .get()
-                .await()
-
-            val logs = snapshot.documents.mapNotNull { doc ->
-                doc.toObject<LogTimeModel>()?.copy(logTimeId = doc.id)
-            }
-
-            Log.d("ActivityRepo", "Tìm thấy ${logs.size} logs chưa phân tích")
-            Result.success(logs)
-        } catch (e: Exception) {
-            Log.e("ActivityRepo", "Lỗi khi lấy unanalyzed logs", e)
-            Result.failure(e)
-        }
-    }
-
-    suspend fun getActivityWithMostUnanalyzedLogs(userId: String): ActivityModel? {
-        return try {
-            Log.d("ActivityRepo", "Tìm activity có nhiều logs chưa phân tích nhất...")
-
-            val activities = getActivitiesByUserId(userId).getOrNull() ?: run {
-                Log.d("ActivityRepo", "Không tìm thấy activities cho user $userId")
-                return null
-            }
-
-            val targetActivity = activities.maxByOrNull { activity ->
-                getUnanalyzedLogs(activity.activityId).getOrNull()?.size ?: 0
-            }
-
-            if (targetActivity != null) {
-                Log.d("ActivityRepo", "Activity được chọn để phân tích: ${targetActivity.title} (${targetActivity.activityId})")
-            } else {
-                Log.d("ActivityRepo", "Không tìm thấy activity phù hợp")
-            }
-
-            targetActivity
-        } catch (e: Exception) {
-            Log.e("ActivityRepo", "Lỗi khi tìm activity", e)
-            null
         }
     }
 
@@ -589,6 +548,21 @@ class ActivityRepo {
         val endOfDay = Timestamp(calendar.time)
 
         try {
+            val activities = activitiesCollection
+                .whereEqualTo("userId", userId)
+                .get()
+                .await()
+                .documents
+                .mapNotNull { doc ->
+                    val id = doc.getString("activityId") ?: doc.id
+                    val title = doc.getString("title") ?: "No Title"
+                    id to title
+                }.toMap()
+
+            if (activities.isEmpty()) {
+                return emptyList()
+            }
+
             val logSnapshot = logTimesCollection
                 .whereEqualTo("userId", userId)
                 .whereGreaterThanOrEqualTo("date", startOfDay)
@@ -596,38 +570,38 @@ class ActivityRepo {
                 .get()
                 .await()
 
-            val logs = logSnapshot.documents.mapNotNull { it.toObject(LogTimeModel::class.java) }
-
-            if (logs.isEmpty()) {
-                return emptyList()
+            val logs = logSnapshot.documents.mapNotNull {
+                it.toObject(LogTimeModel::class.java)?.copy(logTimeId = it.id)
             }
 
-            val activityIds = logs.map { it.activityId }.distinct()
+            val logsByActivity = logs.groupBy { it.activityId }
 
-            if (activityIds.isEmpty()) {
-                return logs.map { it to "No Title" }
-            }
+            val result = mutableListOf<Pair<LogTimeModel, String>>()
 
-            val activityTitlesMap = mutableMapOf<String, String>()
+            activities.forEach { (activityId, title) ->
+                val activityLogs = logsByActivity[activityId] ?: emptyList()
 
-            activityIds.chunked(10).forEachIndexed { index, chunk ->
-                val activitySnapshot = activitiesCollection
-                    .whereIn("activityId", chunk)
-                    .get()
-                    .await()
-
-                activitySnapshot.documents.forEach { doc ->
-                    val id = doc.getString("activityId") ?: ""
-                    val title = doc.getString("title") ?: "No Title"
-                    if (id.isNotEmpty()) {
-                        activityTitlesMap[id] = title
+                if (activityLogs.isNotEmpty()) {
+                    activityLogs.forEach { log ->
+                        result.add(log to title)
                     }
+                } else {
+                    result.add(
+                        LogTimeModel(
+                            logTimeId = "",
+                            activityId = activityId,
+                            userId = userId,
+                            startTime = Timestamp(date),
+                            endTime = Timestamp(date),
+                            date = Timestamp(date),
+                            dayOfWeek = "",
+                            actualStart = Timestamp(date),
+                            actualEnd = Timestamp(date),
+                            duration = 0L,
+                            completeStatus = false
+                        ) to title
+                    )
                 }
-            }
-
-            val result = logs.map { log ->
-                val title = activityTitlesMap[log.activityId] ?: "No Title"
-                log to title
             }
 
             return result
@@ -719,52 +693,22 @@ class ActivityRepo {
         val repeatDays = activity.repeatDays
         if (repeatDays.isEmpty()) return 0
 
+        val sdf = SimpleDateFormat("yyyyMMdd", Locale.getDefault())
         val startCal = Calendar.getInstance().apply { time = startPeriod.toDate() }
         val endCal = Calendar.getInstance().apply { time = endPeriod.toDate() }
-
-        var totalExpected = 0
-
-        val currentCal = startCal.clone() as Calendar
-        while (!currentCal.after(endCal)) {
-            val dayLabel = when (currentCal.get(Calendar.DAY_OF_WEEK)) {
-                Calendar.MONDAY -> "T2"
-                Calendar.TUESDAY -> "T3"
-                Calendar.WEDNESDAY -> "T4"
-                Calendar.THURSDAY -> "T5"
-                Calendar.FRIDAY -> "T6"
-                Calendar.SATURDAY -> "T7"
-                Calendar.SUNDAY -> "CN"
-                else -> ""
-            }
-            if (repeatDays.contains(dayLabel)) {
-                totalExpected++
-            }
-            currentCal.add(Calendar.DATE, 1)
-        }
-
-        val completedCount = logs.count { it.completeStatus }
-
-        return (totalExpected - completedCount).coerceAtLeast(0)
-    }
-
-    fun calculatePendingCount(activity: ActivityModel, logs: List<LogTimeModel>, startPeriod: Timestamp, endPeriod: Timestamp): Int {
-        val repeatDays = activity.repeatDays
-        if (repeatDays.isEmpty()) return 0
-
         val now = Calendar.getInstance()
 
-        val endCal = Calendar.getInstance().apply { time = endPeriod.toDate() }
-        if (now.after(endCal)) return 0
+        val allLoggedDates = logs.map { sdf.format(it.date.toDate()) }.toSet()
 
-        val sdf = SimpleDateFormat("yyyyMMdd", Locale.getDefault())
-
-        val startCal = now.clone() as Calendar
-        val logDatesSet = logs.map { sdf.format(it.date.toDate()) }.toSet()
-
-        var pendingCount = 0
+        var missedCount = 0
         val currentCal = startCal.clone() as Calendar
 
         while (!currentCal.after(endCal)) {
+            if (currentCal.after(now)) {
+                currentCal.add(Calendar.DATE, 1)
+                continue
+            }
+
             val dayLabel = when (currentCal.get(Calendar.DAY_OF_WEEK)) {
                 Calendar.MONDAY -> "T2"
                 Calendar.TUESDAY -> "T3"
@@ -778,120 +722,184 @@ class ActivityRepo {
 
             if (repeatDays.contains(dayLabel)) {
                 val dayString = sdf.format(currentCal.time)
-                if (!logDatesSet.contains(dayString)) {
-                    pendingCount++
+                if (!allLoggedDates.contains(dayString)) {
+                    missedCount++
                 }
             }
             currentCal.add(Calendar.DATE, 1)
         }
-        return pendingCount
+
+        return missedCount
     }
 
-    suspend fun createOrUpdateStatsForCurrentWeek(userId: String) {
+    fun calculatePendingCount(activity: ActivityModel, logs: List<LogTimeModel>, startPeriod: Timestamp, endPeriod: Timestamp): Int {
+        val repeatDays = activity.repeatDays
+        if (repeatDays.isEmpty()) return 0
+
+        val dateFormat = SimpleDateFormat("yyyyMMdd", Locale.getDefault())
+        val now = Calendar.getInstance()
+        val startDate = startPeriod.toDate()
+        val endDate = endPeriod.toDate()
+
+        if (startDate.after(now.time)) {
+            return 0
+        }
+
+        val startCheckDate = if (startDate.before(now.time)) now.time else startDate
+        val loggedDates = logs.map { dateFormat.format(it.date.toDate()) }.toSet()
+
+        var count = 0
+        val calendar = Calendar.getInstance().apply { time = startCheckDate }
+
+        while (calendar.time <= endDate) {
+            val dayLabel = when (calendar.get(Calendar.DAY_OF_WEEK)) {
+                Calendar.MONDAY -> "T2"
+                Calendar.TUESDAY -> "T3"
+                Calendar.WEDNESDAY -> "T4"
+                Calendar.THURSDAY -> "T5"
+                Calendar.FRIDAY -> "T6"
+                Calendar.SATURDAY -> "T7"
+                Calendar.SUNDAY -> "CN"
+                else -> ""
+            }
+
+            if (repeatDays.contains(dayLabel)) {
+                val dateStr = dateFormat.format(calendar.time)
+                if (!loggedDates.contains(dateStr)) {
+                    count++
+                }
+            }
+            calendar.add(Calendar.DATE, 1)
+        }
+
+        return count
+    }
+
+    suspend fun createOrUpdateStatsForWeek(userId: String, startOfWeek: Date? = null, endOfWeek: Date? = null, isCurrentWeek: Boolean = false) {
         val activities = getActivitiesForUser(userId)
         if (activities.isEmpty()) return
 
-        val (startOfWeek, endOfWeek) = DataHelper.getCurrentWeekRange()
-        val periodLabel = "Tuần ${SimpleDateFormat("dd/MM", Locale.getDefault()).format(startOfWeek.toDate())} - " +
-                "${SimpleDateFormat("dd/MM", Locale.getDefault()).format(endOfWeek.toDate())}"
+        val (periodStart, periodEnd) = if (isCurrentWeek) {
+            DataHelper.getCurrentWeekRange().let { it.first.toDate() to it.second.toDate() }
+        } else {
+            requireNotNull(startOfWeek) to requireNotNull(endOfWeek)
+        }
+
+        val periodLabel = "Tuần ${SimpleDateFormat("dd/MM", Locale.getDefault()).format(periodStart)} - " +
+                "${SimpleDateFormat("dd/MM", Locale.getDefault()).format(periodEnd)}"
+        val startTimestamp = Timestamp(periodStart)
+        val endTimestamp = Timestamp(periodEnd)
 
         activities.forEach { activity ->
-            val existingStats = getStatsForActivityInPeriod(activity.activityId,"week", startOfWeek, endOfWeek)
+            val existingStats = getStatsForActivityInPeriod(
+                activity.activityId,
+                "week",
+                startTimestamp,
+                endTimestamp
+            )
 
-            if (existingStats == null) {
-                val logs = getLogTimesForActivityInPeriod(activity.activityId, userId, startOfWeek, endOfWeek)
-                val totalDuration = logs.sumOf { it.duration }
-                val completedCount = logs.count { it.completeStatus }
-                val missedCount = calculateMissedCount(activity, logs, startOfWeek, endOfWeek)
-                val pendingCount = calculatePendingCount(activity, logs, startOfWeek, endOfWeek)
-
-                val newStats = StatsModel(
-                    statId = "",
-                    activityId = activity.activityId,
-                    userId = userId,
-                    type = "week",
-                    periodLabel = periodLabel,
-                    periodStart = startOfWeek,
-                    periodEnd = endOfWeek,
-                    totalDuration = totalDuration,
-                    completedCount = completedCount,
-                    missedCount = missedCount,
-                    pendingCount = pendingCount,
-                    status = "pending"
+            if (existingStats == null || (isCurrentWeek && existingStats.status == "pending")) {
+                val logs = getLogTimesForActivityInPeriod(
+                    activity.activityId,
+                    userId,
+                    startTimestamp,
+                    endTimestamp
                 )
 
-                saveStatsModel(newStats)
-            } else {
-                if (existingStats.status == "pending") {
-                    val logs = getLogTimesForActivityInPeriod(activity.activityId, userId, startOfWeek, endOfWeek)
-                    val totalDuration = logs.sumOf { it.duration }
-                    val completedCount = logs.count { it.completeStatus }
-                    val missedCount = calculateMissedCount(activity, logs, startOfWeek, endOfWeek)
-                    val pendingCount = calculatePendingCount(activity, logs, startOfWeek, endOfWeek)
+                val totalDuration = logs.sumOf { it.duration }
+                val completedCount = logs.count { it.completeStatus }
+                val missedCount = calculateMissedCount(activity, logs, startTimestamp, endTimestamp)
+                val pendingCount = calculatePendingCount(activity, logs, startTimestamp, endTimestamp)
 
-                    val updatedStats = existingStats.copy(
+                val stats = if (existingStats == null) {
+                    StatsModel(
+                        statId = "",
+                        activityId = activity.activityId,
+                        userId = userId,
+                        type = "week",
+                        periodLabel = periodLabel,
+                        periodStart = startTimestamp,
+                        periodEnd = endTimestamp,
+                        totalDuration = totalDuration,
+                        completedCount = completedCount,
+                        missedCount = missedCount,
+                        pendingCount = pendingCount,
+                        status = if (isCurrentWeek) "pending" else "completed"
+                    )
+                } else {
+                    existingStats.copy(
                         totalDuration = totalDuration,
                         completedCount = completedCount,
                         missedCount = missedCount,
                         pendingCount = pendingCount
                     )
-
-                    saveStatsModel(updatedStats)
                 }
+
+                saveStatsModel(stats)
             }
         }
     }
 
-    suspend fun createOrUpdateStatsForCurrentMonth(userId: String) {
+    suspend fun createOrUpdateStatsForMonth(userId: String, startOfMonth: Date? = null, endOfMonth: Date? = null, isCurrentMonth: Boolean = false) {
         val activities = getActivitiesForUser(userId)
         if (activities.isEmpty()) return
 
-        val (startOfMonth, endOfMonth) = DataHelper.getCurrentMonthRange()
-        val periodLabel = "Tháng ${SimpleDateFormat("MM/yyyy", Locale.getDefault()).format(startOfMonth.toDate())}"
+        val (periodStart, periodEnd) = if (isCurrentMonth) {
+            DataHelper.getCurrentMonthRange().let { it.first.toDate() to it.second.toDate() }
+        } else {
+            requireNotNull(startOfMonth) to requireNotNull(endOfMonth)
+        }
+
+        val periodLabel = "Tháng ${SimpleDateFormat("MM/yyyy", Locale.getDefault()).format(periodStart)}"
+        val startTimestamp = Timestamp(periodStart)
+        val endTimestamp = Timestamp(periodEnd)
 
         activities.forEach { activity ->
-            val existingStats = getStatsForActivityInPeriod(activity.activityId, "month", startOfMonth, endOfMonth)
+            val existingStats = getStatsForActivityInPeriod(
+                activity.activityId,
+                "month",
+                startTimestamp,
+                endTimestamp
+            )
 
-            if (existingStats == null) {
-                val logs = getLogTimesForActivityInPeriod(activity.activityId, userId, startOfMonth, endOfMonth)
-                val totalDuration = logs.sumOf { it.duration }
-                val completedCount = logs.count { it.completeStatus }
-                val missedCount = calculateMissedCount(activity, logs, startOfMonth, endOfMonth)
-                val pendingCount = calculatePendingCount(activity, logs, startOfMonth, endOfMonth)
-
-                val newStats = StatsModel(
-                    statId = "",
-                    activityId = activity.activityId,
-                    userId = userId,
-                    type = "month",
-                    periodLabel = periodLabel,
-                    periodStart = startOfMonth,
-                    periodEnd = endOfMonth,
-                    totalDuration = totalDuration,
-                    completedCount = completedCount,
-                    missedCount = missedCount,
-                    pendingCount = pendingCount,
-                    status = "pending"
+            if (existingStats == null || (isCurrentMonth && existingStats.status == "pending")) {
+                val logs = getLogTimesForActivityInPeriod(
+                    activity.activityId,
+                    userId,
+                    startTimestamp,
+                    endTimestamp
                 )
 
-                saveStatsModel(newStats)
-            } else {
-                if (existingStats.status == "pending") {
-                    val logs = getLogTimesForActivityInPeriod(activity.activityId, userId, startOfMonth, endOfMonth)
-                    val totalDuration = logs.sumOf { it.duration }
-                    val completedCount = logs.count { it.completeStatus }
-                    val missedCount = calculateMissedCount(activity, logs, startOfMonth, endOfMonth)
-                    val pendingCount = calculatePendingCount(activity, logs, startOfMonth, endOfMonth)
+                val totalDuration = logs.sumOf { it.duration }
+                val completedCount = logs.count { it.completeStatus }
+                val missedCount = calculateMissedCount(activity, logs, startTimestamp, endTimestamp)
+                val pendingCount = calculatePendingCount(activity, logs, startTimestamp, endTimestamp)
 
-                    val updatedStats = existingStats.copy(
+                val stats = if (existingStats == null) {
+                    StatsModel(
+                        statId = "",
+                        activityId = activity.activityId,
+                        userId = userId,
+                        type = "month",
+                        periodLabel = periodLabel,
+                        periodStart = startTimestamp,
+                        periodEnd = endTimestamp,
+                        totalDuration = totalDuration,
+                        completedCount = completedCount,
+                        missedCount = missedCount,
+                        pendingCount = pendingCount,
+                        status = "pending"
+                    )
+                } else {
+                    existingStats.copy(
                         totalDuration = totalDuration,
                         completedCount = completedCount,
                         missedCount = missedCount,
                         pendingCount = pendingCount
                     )
-
-                    saveStatsModel(updatedStats)
                 }
+
+                saveStatsModel(stats)
             }
         }
     }
@@ -943,6 +951,30 @@ class ActivityRepo {
         } catch (e: Exception) {
             e.printStackTrace()
             return emptyList()
+        }
+    }
+
+    suspend fun deleteAllStatsByActivityId(activityId: String): Boolean {
+        return try {
+            val querySnapshot = statsCollection
+                .whereEqualTo("activityId", activityId)
+                .get()
+                .await()
+
+            if (querySnapshot.isEmpty) {
+                return true
+            }
+
+            val batch = FirebaseFirestore.getInstance().batch()
+            for (document in querySnapshot.documents) {
+                batch.delete(document.reference)
+            }
+
+            batch.commit().await()
+            true
+        } catch (e: Exception) {
+            Log.e("Firestore", "Lỗi khi xóa stats theo activityId: $activityId", e)
+            false
         }
     }
 

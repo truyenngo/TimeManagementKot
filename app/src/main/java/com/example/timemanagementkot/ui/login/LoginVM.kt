@@ -63,7 +63,6 @@ class LoginVM : ViewModel() {
         val email = _email.value.trim()
         val password = _password.value
 
-        // Validate input
         var hasError = false
         if (email.isBlank()) {
             _emailError.value = "Email không được bỏ trống"
@@ -86,7 +85,6 @@ class LoginVM : ViewModel() {
             return
         }
 
-        // Chỉ chạy khi không có lỗi validate
         _isLoading.value = true
         viewModelScope.launch {
             val result = authRepo.login(email, password)
@@ -115,7 +113,6 @@ class LoginVM : ViewModel() {
         _forgotEmailError.value = null
         val email = _forgotEmail.value.trim()
 
-        // Validate input
         var hasError = false
         if (email.isBlank()) {
             _forgotEmailError.value = "Email không được bỏ trống"
@@ -145,6 +142,7 @@ class LoginVM : ViewModel() {
                 onSuccess = {
                     Log.d("ViewModelError", "Reset password success")
                     _snackbarMessage.emit("Đã gửi email đặt lại mật khẩu")
+                    onForgotEmailChanged("")
                     _forgotEmailError.value = null
                     dismissDialog()
                 },

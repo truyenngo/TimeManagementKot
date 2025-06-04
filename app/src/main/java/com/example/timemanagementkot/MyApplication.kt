@@ -15,11 +15,9 @@ class MyApplication : Application() {
         Log.d(TAG, "Ứng dụng đang khởi tạo...")
 
         try {
-            // 1. Khởi tạo Firebase (nếu dùng)
             FirebaseApp.initializeApp(this)
             Log.d(TAG, "Firebase đã sẵn sàng")
 
-            // 2. Tạo notification channel
             NotificationHelper(this)
             Log.d(TAG, "Đã tạo kênh thông báo")
 

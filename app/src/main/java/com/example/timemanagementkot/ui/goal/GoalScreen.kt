@@ -312,7 +312,7 @@ fun GoalScreen(
             onDismissRequest = { finalViewModel?.dismissDialog() },
             title = {
                 Text(
-                    text = "Chọn một mục tiêu",
+                    text = "Chọn một hoạt động",
                     style = MaterialTheme.typography.titleLarge
                 )
             },
@@ -435,7 +435,7 @@ fun GoalScreen(
                         },
                         enabled = selectedActivity != null
                     ) {
-                        Text("Chọn")
+                        Text("Tạo")
                     }
                 }
             }

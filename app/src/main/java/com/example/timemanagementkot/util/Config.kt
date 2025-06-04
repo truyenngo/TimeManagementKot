@@ -20,7 +20,6 @@ object Config {
             val apiKey = properties.getProperty(KEY_GEMINI_API)
                 ?: throw Exception("Missing Gemini API Key in local.properties")
 
-            // Log mask key để bảo mật (chỉ hiển thị 4 ký tự cuối)
             Log.d(TAG, "Đọc API key thành công: ${maskApiKey(apiKey)}")
 
             apiKey

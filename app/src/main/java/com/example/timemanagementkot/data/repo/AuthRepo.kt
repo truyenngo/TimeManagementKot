@@ -30,6 +30,16 @@ class AuthRepo {
         firebaseAuth.signOut()
     }
 
+    suspend fun getUserNameByUid(uid: String): String {
+        return try {
+            val snapshot = Firebase.firestore.collection("users").document(uid).get().await()
+            snapshot.getString("displayName") ?: "Bạn"
+        } catch (e: Exception) {
+            Log.e("AuthRepo", "Lỗi khi lấy tên user", e)
+            "Bạn"
+        }
+    }
+
     fun register(email: String, password: String, displayName: String, callback: (Result<User>) -> Unit) {
         firebaseAuth.createUserWithEmailAndPassword(email, password)
             .addOnSuccessListener { authResult ->

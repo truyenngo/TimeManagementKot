@@ -371,14 +371,6 @@ fun DetailGoalScreen(
                     ) {
                         Text("Thoát")
                     }
-
-                    Button(
-                        onClick = { onSaveClick() },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD58099)),
-                        modifier = Modifier.padding(10.dp)
-                    ) {
-                        Text("Lưu mục tiêu")
-                    }
                 }
             }
         }

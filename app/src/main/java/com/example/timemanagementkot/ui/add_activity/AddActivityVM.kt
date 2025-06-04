@@ -64,15 +64,6 @@ class AddActivityViewModel() : ViewModel() {
     private val _breakMinutesState = MutableStateFlow(5)
     val breakMinutesState: StateFlow<Int> = _breakMinutesState
 
-    private val _isAlarmState = MutableStateFlow(false)
-    val isAlarmState: StateFlow<Boolean> = _isAlarmState
-
-    private val _selectedRingtoneState = MutableStateFlow("Default")
-    val selectedRingtoneState: StateFlow<String> = _selectedRingtoneState
-
-    private val _ringtoneVolumeState = MutableStateFlow(0.5f)
-    val ringtoneVolumeState: StateFlow<Float> = _ringtoneVolumeState
-
     private val _errorState = MutableStateFlow<String?>(null)
     val errorState: StateFlow<String?> = _errorState
 
@@ -134,18 +125,6 @@ class AddActivityViewModel() : ViewModel() {
         _breakMinutesState.value = value
     }
 
-    fun onAlarmToggle(enabled: Boolean) {
-        _isAlarmState.value = enabled
-    }
-
-    fun onSelectedRingtoneChange(title: String) {
-        _selectedRingtoneState.value = title
-    }
-
-    fun onRingtoneVolumeChange(volume: Float) {
-        _ringtoneVolumeState.value = volume
-    }
-
     fun resetSaveSuccess() {
         _onSaveSuccess.value = null
     }
@@ -170,13 +149,6 @@ class AddActivityViewModel() : ViewModel() {
         if (_isPomodoroState.value) {
             if (_focusMinutesState.value <= 0 || _breakMinutesState.value <= 0) {
                 _errorState.value = "Thời gian Pomodoro phải lớn hơn 0"
-                return false
-            }
-        }
-
-        if (_isAlarmState.value) {
-            if (_selectedRingtoneState.value.isBlank() || _selectedRingtoneState.value == "Default" || _ringtoneVolumeState.value !in 0f..1f) {
-                _errorState.value = "Vui lòng chọn âm báo hợp lệ"
                 return false
             }
         }

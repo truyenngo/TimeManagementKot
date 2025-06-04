@@ -58,8 +58,8 @@ class StatisticsVM : ViewModel() {
         viewModelScope.launch {
             val userId = getCurrentUserId()
             if (userId != null) {
-                activityRepo.createOrUpdateStatsForCurrentWeek(userId)
-                activityRepo.createOrUpdateStatsForCurrentMonth(userId)
+                activityRepo.createOrUpdateStatsForWeek(userId, isCurrentWeek = true)
+                activityRepo.createOrUpdateStatsForMonth(userId, isCurrentMonth = true)
 
                 fetchDataForWeek(_currentWeekOffset.value)
                 fetchDataForMonth(_currentMonthOffset.value)
@@ -144,6 +144,9 @@ class StatisticsVM : ViewModel() {
                 val startOfWeek = getStartOfWeekForOffset(weekOffset)
                 val endOfWeek = getEndOfWeekForOffset(weekOffset)
 
+                val isCurrentWeek = weekOffset == 0
+                activityRepo.createOrUpdateStatsForWeek(userId, startOfWeek, endOfWeek, isCurrentWeek)
+
                 val stats = activityRepo.getStatsWithTitleBetweenPeriods(
                     userId,
                     startOfWeek,
@@ -186,6 +189,8 @@ class StatisticsVM : ViewModel() {
                 }
 
                 val (startOfMonth, endOfMonth) = getStartEndOfMonthForOffset(monthOffset)
+
+                activityRepo.createOrUpdateStatsForMonth(userId, startOfMonth, endOfMonth)
 
                 val stats = activityRepo.getStatsWithTitleBetweenPeriods(
                     userId,
@@ -241,7 +246,9 @@ class StatisticsVM : ViewModel() {
 
     private fun getStartOfWeekForOffset(weekOffset: Int): Date {
         val calendar = Calendar.getInstance().apply {
-            set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
+            firstDayOfWeek = Calendar.MONDAY
+            val diff = (7 + (get(Calendar.DAY_OF_WEEK) - Calendar.MONDAY)) % 7
+            add(Calendar.DATE, -diff)
             add(Calendar.WEEK_OF_YEAR, weekOffset)
             set(Calendar.HOUR_OF_DAY, 0)
             set(Calendar.MINUTE, 0)
@@ -253,9 +260,11 @@ class StatisticsVM : ViewModel() {
 
     private fun getEndOfWeekForOffset(weekOffset: Int): Date {
         val calendar = Calendar.getInstance().apply {
-            set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
+            firstDayOfWeek = Calendar.MONDAY
+            val diff = (7 + (get(Calendar.DAY_OF_WEEK) - Calendar.MONDAY)) % 7
+            add(Calendar.DATE, -diff)
             add(Calendar.WEEK_OF_YEAR, weekOffset)
-            add(Calendar.DAY_OF_MONTH, 6)
+            add(Calendar.DATE, 6)
             set(Calendar.HOUR_OF_DAY, 23)
             set(Calendar.MINUTE, 59)
             set(Calendar.SECOND, 59)
@@ -264,10 +273,11 @@ class StatisticsVM : ViewModel() {
         return calendar.time
     }
 
+
     private fun updateCurrentMonthDisplay(monthOffset: Int) {
         val (startOfMonth, endOfMonth) = getStartEndOfMonthForOffset(monthOffset)
         val dateFormat = SimpleDateFormat("MM/yyyy", Locale.getDefault())
-        _currentMonthState.value = dateFormat.format(startOfMonth)
+        _currentMonthState.value = "Tháng ${dateFormat.format(startOfMonth)}"
     }
 
     private fun getStartEndOfMonthForOffset(monthOffset: Int): Pair<Date, Date> {

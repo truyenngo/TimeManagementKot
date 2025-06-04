@@ -13,6 +13,7 @@ import com.example.timemanagementkot.notifications.receiver.ActivityNotification
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import java.util.Calendar
 
 class ListActivityVM : ViewModel() {
     private val authRepo = AuthRepo()
@@ -40,7 +41,14 @@ class ListActivityVM : ViewModel() {
                 val result = activityRepo.getActivitiesByUserId(userId)
                 if (result.isSuccess) {
                     val sortedActivities = result.getOrDefault(emptyList())
-                        .sortedBy { it.startTime }
+                        .sortedBy { activity ->
+                            val calendar = Calendar.getInstance().apply {
+                                time = activity.startTime.toDate()
+                            }
+                            calendar.get(Calendar.HOUR_OF_DAY) * 3600 +
+                                    calendar.get(Calendar.MINUTE) * 60 +
+                                    calendar.get(Calendar.SECOND)
+                        }
                     _activities.value = sortedActivities
                 } else {
                     _errorMessage.value = result.exceptionOrNull()?.message ?: "Lỗi không xác định"
@@ -57,6 +65,8 @@ class ListActivityVM : ViewModel() {
             AlarmScheduler(context).cancelAllForActivity(activityId)
 
             activityRepo.deleteActivityById(activityId).onSuccess {
+                activityRepo.deleteAllLogTimesByActivityId(activityId)
+                activityRepo.deleteAllStatsByActivityId(activityId)
                 goalRepo.deleteActivityWithRelatedGoals(activityId)
                 _activities.value = _activities.value.filterNot { it.activityId == activityId }
                 sendCleanupBroadcast(context, activityId)

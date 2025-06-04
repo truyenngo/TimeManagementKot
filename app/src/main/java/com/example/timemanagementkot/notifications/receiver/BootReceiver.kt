@@ -11,10 +11,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
-/**
- * BroadcastReceiver để lên lịch lại các thông báo khi thiết bị khởi động lại
- * Đảm bảo các thông báo vẫn hoạt động sau khi reboot
- */
 class BootReceiver : BroadcastReceiver() {
     companion object {
         private const val TAG = "BootReceiver"
@@ -27,7 +23,6 @@ class BootReceiver : BroadcastReceiver() {
             Log.d(TAG, "Xử lý khởi động lại thiết bị...")
 
             try {
-                // 1. Kiểm tra và lấy userId
                 val authRepo = AuthRepo()
                 val userId = authRepo.getCurrentUser()?.uid ?: run {
                     Log.w(TAG, "Không tìm thấy user đang đăng nhập")
@@ -35,7 +30,6 @@ class BootReceiver : BroadcastReceiver() {
                 }
                 Log.d(TAG, "User ID: $userId")
 
-                // 2. Lấy danh sách activities từ repository
                 val repo = ActivityRepo()
                 CoroutineScope(Dispatchers.IO).launch {
                     val activities = repo.getActivitiesByUserId(userId).getOrElse {
@@ -45,7 +39,6 @@ class BootReceiver : BroadcastReceiver() {
 
                     Log.d(TAG, "Tìm thấy ${activities.size} activities cần lên lịch lại")
 
-                    // 3. Lên lịch lại từng activity
                     val scheduler = AlarmScheduler(context)
                     activities.forEach { activity ->
                         try {

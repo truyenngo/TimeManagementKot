@@ -92,6 +92,7 @@ fun HomeScreen(
     val currentDate by finalViewModel?.currentDateState?.collectAsState() ?: remember { mutableStateOf(defaultCurrentDate) }
     val activityListWithLogTime by finalViewModel?.activities?.collectAsState() ?: remember { mutableStateOf(defaultActivityList) }
     val isLoading by finalViewModel?.isLoading?.collectAsState() ?: remember { mutableStateOf(false) }
+    val isCurrentDate by finalViewModel?.isCurrentDate?.collectAsState() ?: remember { mutableStateOf(false) }
 
     val appContext = LocalContext.current.applicationContext
     val userId = if (!isInPreview) FirebaseAuth.getInstance().currentUser?.uid else "preview-user-id"
@@ -263,7 +264,8 @@ fun HomeScreen(
                                     ActivityItem(
                                         activityWithLogTime,
                                         onActivityClick,
-                                        showSnackbar = showSnackbar
+                                        showSnackbar = showSnackbar,
+                                        isCurrentDate = isCurrentDate
                                     )
                                 }
                             }
@@ -318,7 +320,8 @@ fun BottomNavItem(iconId: Int, label: String, onClick: () -> Unit) {
 private fun ActivityItem(
     activityWithLogTime: ActivityWithLogTime,
     onActivityClick: (ActivityWithLogTime) -> Unit,
-    showSnackbar: (String) -> Unit
+    showSnackbar: (String) -> Unit,
+    isCurrentDate: Boolean
 ) {
     Card(
         modifier = Modifier
@@ -327,6 +330,8 @@ private fun ActivityItem(
             .clickable {
                 if (activityWithLogTime.completeStatus) {
                     showSnackbar("Hoạt động đã được ghi lại trước đó")
+                } else if (!isCurrentDate) {
+                    showSnackbar("Không thể ghi log vì ngày không hợp lệ")
                 } else {
                     onActivityClick(activityWithLogTime)
                 }

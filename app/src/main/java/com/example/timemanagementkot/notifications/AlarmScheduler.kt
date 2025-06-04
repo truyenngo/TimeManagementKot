@@ -73,12 +73,10 @@ class AlarmScheduler(private val context: Context) {
             "T7" -> Calendar.SATURDAY
             "CN" -> Calendar.SUNDAY
             else -> {
-                Log.w(TAG, "Ngày không hợp lệ: $day, mặc định là Chủ nhật")
                 Calendar.SUNDAY
             }
         }
     }
-
 
     fun cancelAllForActivity(activityId: String) {
         listOf("T2","T3","T4","T5","T6","T7","CN").forEach { day ->

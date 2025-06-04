@@ -6,6 +6,7 @@ import android.content.Intent
 import android.util.Log
 import com.example.timemanagementkot.data.model.ActivityModel
 import com.example.timemanagementkot.data.repo.ActivityRepo
+import com.example.timemanagementkot.data.repo.AuthRepo
 import com.example.timemanagementkot.notifications.AlarmScheduler
 import com.example.timemanagementkot.notifications.NotificationHelper
 import com.google.gson.Gson
@@ -23,7 +24,6 @@ class ActivityNotificationReceiver : BroadcastReceiver() {
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                // 1. Parse activity data
                 val activityJson = intent?.getStringExtra("activity_data") ?: run {
                     Log.w(TAG, "Intent missing activity_data")
                     return@launch
@@ -32,7 +32,9 @@ class ActivityNotificationReceiver : BroadcastReceiver() {
                 val activity = Gson().fromJson(activityJson, ActivityModel::class.java)
                 Log.d(TAG, "Processing activity: ${activity.title} (${activity.activityId})")
 
-                // 2. Verify activity exists
+                val userId = AuthRepo().getCurrentUser()?.uid ?: return@launch
+                val displayName = AuthRepo().getUserNameByUid(userId)
+
                 val repo = ActivityRepo()
                 if (!repo.isActivityExist(activity.activityId)) {
                     Log.d(TAG, "Activity was deleted, canceling notifications")
@@ -40,10 +42,8 @@ class ActivityNotificationReceiver : BroadcastReceiver() {
                     return@launch
                 }
 
-                // 3. Show notification
-                NotificationHelper(context).showActivityNotification(activity)
+                NotificationHelper(context).showActivityNotification(activity, displayName)
 
-                // 4. Reschedule if needed
                 if (activity.repeatDays.isNotEmpty()) {
                     Log.d(TAG, "Rescheduling recurring activity")
                     AlarmScheduler(context).schedule(activity)

@@ -44,7 +44,7 @@ class GeminiAnalysisService(private val generativeModel: GenerativeModel) {
             "- ${log.dayOfWeek}: ${log.actualStart.toDate().formatTime()} -> ${
                 log.actualEnd.toDate().formatTime()
             }" +
-                    " (${log.duration} phút, ${if (log.completeStatus) "✅" else "❌"})"
+                    " (${log.duration} phút, ${if (log.completeStatus) "true" else "false"})"
         }
 
         return """

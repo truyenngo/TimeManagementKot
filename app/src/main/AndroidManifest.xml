@@ -15,9 +15,9 @@
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@mipmap/ic_app"
         android:label="@string/app_name"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:roundIcon="@mipmap/ic_app"
         android:supportsRtl="true"
         android:theme="@style/Theme.TimeManagementKot"
         tools:targetApi="31">
@@ -41,15 +41,11 @@
             android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED"/>
-                <action android:name="android.intent.action.QUICKBOOT_POWERON"/> <!-- Cho Huawei, Oppo... -->
-                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED"/> <!-- Cho Samsung -->
+                <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED"/>
                 <action android:name="android.intent.action.REBOOT"/>
             </intent-filter>
         </receiver>
 
-<!--        <service-->
-<!--            android:name="androidx.work.impl.background.systemalarm.SystemAlarmService"-->
-<!--            android:enabled="true"-->
-<!--            android:exported="false" />-->
     </application>
 </manifest>

@@ -14,11 +14,12 @@ import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
 import android.content.Context
+import androidx.work.Data
 import com.example.timemanagementkot.ai.GeminiAnalysisService
 import com.example.timemanagementkot.ai.GeminiHelper
-import com.example.timemanagementkot.data.model.ActivityModel
 import com.example.timemanagementkot.data.model.LogTimeModel
 import com.example.timemanagementkot.data.model.TimeAdjustmentSuggestion
+import com.example.timemanagementkot.util.DataHelper
 import com.example.timemanagementkot.worker.GoalWorkerHelper
 import com.google.firebase.Timestamp
 import java.util.Date
@@ -48,6 +49,9 @@ class HomeVM() : ViewModel() {
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading
+
+    private val _isCurrentDate = MutableStateFlow(true)
+    val isCurrentDate: StateFlow<Boolean> = _isCurrentDate
 
     private val _currentDateOffset = MutableStateFlow(0)
     val currentDateOffset: StateFlow<Int> = _currentDateOffset
@@ -179,8 +183,8 @@ class HomeVM() : ViewModel() {
                 val activity = _activities.value.find { it.activity.activityId == suggestion.activityId }
                     ?.activity ?: return@launch
 
-                val newStartTime = parseSuggestedTime(activity.startTime, suggestion.suggestedStart)
-                val newEndTime = parseSuggestedTime(activity.endTime, suggestion.suggestedEnd)
+                val newStartTime = DataHelper.parseSuggestedTime(activity.startTime, suggestion.suggestedStart)
+                val newEndTime = DataHelper.parseSuggestedTime(activity.endTime, suggestion.suggestedEnd)
 
                 activityRepo.updateActivityTime(
                     activityId = activity.activityId,
@@ -215,7 +219,6 @@ class HomeVM() : ViewModel() {
                 val suggestion = _selectedSuggestion.value ?: return@launch
 
                 activityRepo.deleteSuggestion(suggestion.sugestionId).onSuccess {
-                    // Xóa thành công, cập nhật danh sách gợi ý
                     val userId = authRepo.getCurrentUser()?.uid ?: return@onSuccess
                     fetchSuggestions(userId)
 
@@ -250,7 +253,14 @@ class HomeVM() : ViewModel() {
                     .onSuccess { activities ->
                         val sortedActivities = activities.sortedWith(
                             compareBy<ActivityWithLogTime> { it.completeStatus }
-                                .thenBy { it.activity.startTime.seconds }
+                                .thenBy { activity ->
+                                    val calendar = Calendar.getInstance().apply {
+                                        time = activity.activity.startTime.toDate()
+                                    }
+                                    calendar.get(Calendar.HOUR_OF_DAY) * 3600 +
+                                            calendar.get(Calendar.MINUTE) * 60 +
+                                            calendar.get(Calendar.SECOND)
+                                }
                         )
                         _activities.value = sortedActivities
                         Log.d("HomeVM", "Fetched ${activities.size} activities for offset $offset")
@@ -281,6 +291,11 @@ class HomeVM() : ViewModel() {
             add(Calendar.DATE, offset)
         }
 
+        val today = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
+        _isCurrentDate.value = (calendar.get(Calendar.YEAR) == today.get(Calendar.YEAR) &&
+                calendar.get(Calendar.MONTH) == today.get(Calendar.MONTH) &&
+                calendar.get(Calendar.DAY_OF_MONTH) == today.get(Calendar.DAY_OF_MONTH))
+
         val dayOfWeek = convertCalendarDayToFullDayFormat(calendar.get(Calendar.DAY_OF_WEEK))
         val dateFormat = SimpleDateFormat("dd/MM/yy", Locale.getDefault())
         val dateStr = dateFormat.format(calendar.time)
@@ -305,19 +320,6 @@ class HomeVM() : ViewModel() {
         GoalWorkerHelper.enqueueGoalWorkerIfNeeded(userId, context)
     }
 
-    private fun parseSuggestedTime(originalTime: Timestamp, newTimeStr: String): Timestamp {
-        val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
-        val newTime = timeFormat.parse(newTimeStr) ?: return originalTime
 
-        val calendar = Calendar.getInstance().apply {
-            time = originalTime.toDate()
-
-            val newTimeCalendar = Calendar.getInstance().apply { time = newTime }
-            set(Calendar.HOUR_OF_DAY, newTimeCalendar.get(Calendar.HOUR_OF_DAY))
-            set(Calendar.MINUTE, newTimeCalendar.get(Calendar.MINUTE))
-        }
-
-        return Timestamp(calendar.time)
-    }
 }
 

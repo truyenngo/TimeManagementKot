@@ -11,10 +11,6 @@ import com.example.timemanagementkot.R
 import com.example.timemanagementkot.data.model.ActivityModel
 import com.example.timemanagementkot.ui.MainActivity
 
-/**
- * Helper class để quản lý tất cả các thông báo trong ứng dụng
- * Xử lý tạo kênh thông báo và hiển thị các loại thông báo khác nhau
- */
 class NotificationHelper(private val context: Context) {
     companion object {
         private const val TAG = "NotificationHelper"
@@ -29,9 +25,6 @@ class NotificationHelper(private val context: Context) {
         createNotificationChannel()
     }
 
-    /**
-     * Tạo kênh thông báo (bắt buộc cho Android 8.0+)
-     */
     private fun createNotificationChannel() {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
             Log.d(TAG, "Đang tạo notification channel...")
@@ -52,30 +45,7 @@ class NotificationHelper(private val context: Context) {
         }
     }
 
-    /**
-     * Hiển thị thông báo test (dùng để debug)
-     */
-    fun showTestNotification() {
-        Log.d(TAG, "Chuẩn bị hiển thị thông báo test...")
-        try {
-            val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_notification)
-                .setContentTitle("Test Notification")
-                .setContentText("This is a test notification")
-                .setPriority(NotificationCompat.PRIORITY_HIGH)
-                .build()
-
-            notificationManager.notify(9999, notification)
-        } catch (e: Exception) {
-            Log.e(TAG, "Lỗi khi hiển thị test notification", e)
-        }
-    }
-
-    /**
-     * Hiển thị thông báo cho một hoạt động cụ thể
-     * @param activity Hoạt động cần thông báo
-     */
-    fun showActivityNotification(activity: ActivityModel) {
+    fun showActivityNotification(activity: ActivityModel, displayName: String) {
         Log.d(TAG, "Chuẩn bị thông báo cho hoạt động: ${activity.title}")
 
         try {
@@ -91,10 +61,13 @@ class NotificationHelper(private val context: Context) {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
+            val startTimeStr = formatTimestamp(activity.startTime)
+            val endTimeStr = formatTimestamp(activity.endTime)
+
             val notification = NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_notification)
-                .setContentTitle("⏰ ${activity.title}")
-                .setContentText("Đã đến giờ bắt đầu hoạt động: ${activity.title}")
+                .setContentTitle("${activity.title}")
+                .setContentText("$displayName ơi, đã đến giờ bắt đầu hoạt động rồi: ${activity.title} (từ $startTimeStr đến $endTimeStr)")
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setContentIntent(pendingIntent)
                 .setAutoCancel(true)
@@ -108,4 +81,10 @@ class NotificationHelper(private val context: Context) {
             Log.e(TAG, "Lỗi khi hiển thị thông báo cho ${activity.title}", e)
         }
     }
+
+    private fun formatTimestamp(timestamp: com.google.firebase.Timestamp): String {
+        val sdf = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+        return sdf.format(timestamp.toDate())
+    }
+
 }

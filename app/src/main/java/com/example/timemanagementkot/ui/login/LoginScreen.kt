@@ -296,6 +296,22 @@ fun LoginScreen(
                             Spacer(modifier = Modifier.fillMaxHeight())
                         }
                     }
+                    Row(
+                        modifier = Modifier
+                            .height(30.dp)
+                            .fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (isLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier
+                                    .size(16.dp),
+                                strokeWidth = 2.dp
+                            )
+                        }
+                    }
+
                 }
             },
             confirmButton = {
@@ -306,7 +322,10 @@ fun LoginScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { finalViewModel?.dismissDialog() }) {
+                TextButton(onClick = {
+                    finalViewModel?.dismissDialog()
+                    finalViewModel?.onForgotEmailChanged("")
+                }) {
                     Text("Thoát")
                 }
             }

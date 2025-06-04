@@ -77,6 +77,7 @@ fun LogTimeScreen(
     val breakMinutes by finalViewModel?.breakMinutesState?.collectAsState() ?: remember { mutableIntStateOf(defaultBreakMinutes) }
     val isFocusPhase by finalViewModel?.isFocusPhase?.collectAsState() ?: remember { mutableStateOf(true) }
     var hasStarted by remember { mutableStateOf(false) }
+    var hasEnded by remember { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
@@ -177,7 +178,9 @@ fun LogTimeScreen(
                                     finalViewModel?.onStartButtonClick()
                                     finalViewModel?.startPomodoroCycle(focusMinutes, breakMinutes)
                                     hasStarted = true
-                                }
+                                    hasEnded = false
+                                },
+                                enabled = !hasStarted && !hasEnded
                             ) {
                                 Text("Bắt đầu")
                             }
@@ -187,8 +190,10 @@ fun LogTimeScreen(
                                     finalViewModel?.stopTimer()
                                     finalViewModel?.onEndButtonClick()
                                     finalViewModel?.stopPomodoroTimer()
+                                    hasEnded = true
                                     hasStarted = false
-                                }
+                                },
+                                enabled = hasStarted && !hasEnded
                             ) {
                                 Text("Kết thúc")
                             }

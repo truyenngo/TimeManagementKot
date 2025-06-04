@@ -1,7 +1,9 @@
 package com.example.timemanagementkot.util
 
 import com.google.firebase.Timestamp
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Locale
 import java.util.TimeZone
 
 object DataHelper {
@@ -60,6 +62,21 @@ object DataHelper {
         val minute = calendar.get(Calendar.MINUTE)
         val second = calendar.get(Calendar.SECOND)
         return hour * 3600 + minute * 60 + second
+    }
+
+    fun parseSuggestedTime(originalTime: Timestamp, newTimeStr: String): Timestamp {
+        val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+        val newTime = timeFormat.parse(newTimeStr) ?: return originalTime
+
+        val calendar = Calendar.getInstance().apply {
+            time = originalTime.toDate()
+
+            val newTimeCalendar = Calendar.getInstance().apply { time = newTime }
+            set(Calendar.HOUR_OF_DAY, newTimeCalendar.get(Calendar.HOUR_OF_DAY))
+            set(Calendar.MINUTE, newTimeCalendar.get(Calendar.MINUTE))
+        }
+
+        return Timestamp(calendar.time)
     }
 
 }
